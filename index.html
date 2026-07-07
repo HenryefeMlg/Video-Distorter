@@ -69,13 +69,12 @@
             border: 1px solid #2d2d3d;
         }
 
-        canvas, video {
+        canvas {
             max-width: 100%;
             max-height: 600px;
             border-radius: 4px;
         }
 
-        /* Gizli ham video elementi */
         #sourceVideo {
             display: none;
         }
@@ -175,7 +174,6 @@
     </header>
 
     <div class="container">
-        <!-- Video Alanı -->
         <div class="workspace">
             <div id="placeholder" class="placeholder-text">
                 <p>Lütfen düzenlemek için bir video yükleyin</p>
@@ -185,7 +183,6 @@
             <canvas id="outputCanvas" style="display: none;"></canvas>
         </div>
 
-        <!-- Kontrol Paneli -->
         <div class="controls-panel">
             <input type="file" id="fileInput" accept="video/*">
             
@@ -195,13 +192,11 @@
 
             <hr style="border-color: #2d2d3d; margin: 10px 0;">
 
-            <!-- Distorsiyon Sürgüsü -->
             <div class="control-group">
-                <label>Distorsiyon (Soldan Sağa Dalga) <span id="distVal">%0</span></label>
+                <label>Görsel Distorsiyon (Dalga) <span id="distVal">%0</span></label>
                 <input type="range" id="distortionRange" min="0" max="800" value="0">
             </div>
 
-            <!-- Filtre Tipi -->
             <div class="control-group">
                 <label>Video Renk Filtresi</label>
                 <select id="filterType">
@@ -213,13 +208,11 @@
                 </select>
             </div>
 
-            <!-- Yoğunluk Sürgüsü -->
             <div class="control-group">
-                <label>Filtre Yoğunluğu (Crispy Seviyesi) <span id="intensityVal">%100</span></label>
+                <label>Yoğunluk & Ses Bozulması (Crispy) <span id="intensityVal">%100</span></label>
                 <input type="range" id="intensityRange" min="0" max="500" value="100">
             </div>
 
-            <!-- İndirme Butonu -->
             <button class="btn" id="downloadBtn" style="background-color: #10b981; display: none;">
                 💾 Bozulmuş Videoyu İndir
             </button>
@@ -234,12 +227,10 @@
         const placeholder = document.getElementById('placeholder');
         const downloadBtn = document.getElementById('downloadBtn');
 
-        // Kontroller
         const distortionRange = document.getElementById('distortionRange');
         const filterType = document.getElementById('filterType');
         const intensityRange = document.getElementById('intensityRange');
 
-        // Değer Göstergeleri
         const distVal = document.getElementById('distVal');
         const intensityVal = document.getElementById('intensityVal');
 
@@ -247,32 +238,103 @@
         let mediaRecorder;
         let recordedChunks = [];
 
-        // Input Değişiklikleri Dinleme
-        distortionRange.addEventListener('input', (e) => distVal.textContent = `%${e.target.value}`);
-        intensityRange.addEventListener('input', (e) => intensityVal.textContent = `%${e.target.value}`);
+        // Web Audio API Değişkenleri
+        let audioCtx;
+        let audioSource;
+        let distortionNode;
+        let gainNode;
+        let audioDestination; // Kayıt sistemi için
 
-        // Video Yükleme İşlemi
+        distortionRange.addEventListener('input', (e) => distVal.textContent = `%${e.target.value}`);
+        
+        intensityRange.addEventListener('input', (e) => {
+            intensityVal.textContent = `%${e.target.value}`;
+            updateAudioDistortion(parseFloat(e.target.value));
+        });
+
+        // Ses Bozulma Algoritması (WaveShaper Eğrisi)
+        function makeDistortionCurve(amount) {
+            const k = typeof amount === 'number' ? amount : 50;
+            const n_samples = 44100;
+            const curve = new Float32Array(n_samples);
+            const deg = Math.PI / 180;
+            for (let i = 0 ; i < n_samples; ++i ) {
+                const x = (i * 2) / n_samples - 1;
+                // Matematiksel sinyal kırpma (Overdrive/Clipping) formülü
+                curve[i] = ( (3 + k) * x * 20 * deg ) / ( Math.PI + k * Math.abs(x) );
+            }
+            return curve;
+        }
+
+        // Ses Sitemini Başlatma (Kullanıcı etkileşimi şarttır)
+        function initAudio() {
+            if (audioCtx) return; 
+
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            audioSource = audioCtx.createMediaElementSource(sourceVideo);
+            
+            distortionNode = audioCtx.createWaveShaper();
+            gainNode = audioCtx.createGain();
+            audioDestination = audioCtx.createMediaStreamDestination();
+
+            // Eğriyi oluştur ve bağla
+            distortionNode.curve = makeDistortionCurve(0);
+            distortionNode.oversample = '4x';
+
+            // Ses Zinciri: Video -> Distorsiyon -> Kazanç(Ses Seviyesi) -> Hoparlör & Kayıt Cihazı
+            audioSource.connect(distortionNode);
+            distortionNode.connect(gainNode);
+            
+            // Hem bizim duyabilmemiz için hoparlörlere, hem de kaydetmek için sanal çıkışa bağlıyoruz
+            gainNode.connect(audioCtx.destination);
+            gainNode.connect(audioDestination);
+        }
+
+        // Yoğunluk değiştikçe sesi patlatma fonksiyonu
+        function updateAudioDistortion(intensity) {
+            if (!distortionNode || !gainNode) return;
+
+            if (intensity <= 100) {
+                // %100 ve altında orijinal temiz ses kalır
+                distortionNode.curve = makeDistortionCurve(0);
+                gainNode.gain.value = 1.0;
+            } else {
+                // %101 - %500 arasında ses kademeli olarak bass boosted ve earrape moduna girer
+                const distortionAmount = (intensity - 100) * 1.5; 
+                distortionNode.curve = makeDistortionCurve(distortionAmount);
+                
+                // Ses patladığı için kulakları tamamen sağır etmesin diye kazancı hafif dengeliyoruz 
+                // ama yine de "crispy" / aşırı yüksek seviyede kalmasını sağlıyoruz
+                gainNode.gain.value = 1.0 + ((intensity - 100) / 100) * 0.5;
+            }
+        }
+
+        // Video Yükleme
         fileInput.addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
                 const fileURL = URL.createObjectURL(file);
                 sourceVideo.src = fileURL;
                 placeholder.style.display = 'none';
-                outputCanvas.style.style = 'block';
-                sourceVideo.style.display = 'none'; // Sadece canvas'ı göstereceğiz
                 
                 sourceVideo.addEventListener('loadedmetadata', () => {
                     outputCanvas.width = sourceVideo.videoWidth;
                     outputCanvas.height = sourceVideo.videoHeight;
                     outputCanvas.style.display = 'block';
                     downloadBtn.style.display = 'block';
+                    
+                    // Ses motorunu çalıştır ve videoyu oynat
+                    initAudio();
+                    audioCtx.resume();
+                    updateAudioDistortion(parseFloat(intensityRange.value));
+                    
                     sourceVideo.play();
                     renderTimeline();
                 });
             }
         });
 
-        // Gerçek Zamanlı Efekt Döngüsü
+        // Görüntü Efekt Döngüsü
         function renderTimeline() {
             if (sourceVideo.paused || sourceVideo.ended) {
                 animationFrameId = requestAnimationFrame(renderTimeline);
@@ -281,51 +343,42 @@
 
             const w = outputCanvas.width;
             const h = outputCanvas.height;
-
-            // İlk olarak temiz ham görüntüyü çiz
             ctx.drawImage(sourceVideo, 0, 0, w, h);
 
-            // 1. ADIM: Soldan Sağa Dalga Distorsiyonu (Pixel Shifting)
+            // 1. Distorsiyon (Pixel Shifting)
             const distAmp = parseFloat(distortionRange.value); 
             if (distAmp > 0) {
                 const imgData = ctx.getImageData(0, 0, w, h);
                 const srcData = new Uint8ClampedArray(imgData.data);
                 const time = Date.now() * 0.005;
-
-                // %800'e kadar ölçeklemek için çarpan
                 const distortionStrength = (distAmp / 100) * 15; 
 
                 for (let y = 0; y < h; y++) {
-                    // Soldan sağa dalga efekti için sinüs dalgası
                     const shiftX = Math.floor(Math.sin((y / 30) + time) * distortionStrength);
-                    
                     for (let x = 0; x < w; x++) {
                         let srcX = x + shiftX;
-                        // Ekran dışına taşmayı engelle (Sarıp sarmala veya sınırda tut)
                         if (srcX < 0) srcX = 0;
                         if (srcX >= w) srcX = w - 1;
 
                         const targetIdx = (y * w + x) * 4;
                         const srcIdx = (y * w + srcX) * 4;
 
-                        imgData.data[targetIdx] = srcData[srcIdx];     // R
-                        imgData.data[targetIdx+1] = srcData[srcIdx+1]; // G
-                        imgData.data[targetIdx+2] = srcData[srcIdx+2]; // B
-                        imgData.data[targetIdx+3] = srcData[srcIdx+3]; // A
+                        imgData.data[targetIdx] = srcData[srcIdx];
+                        imgData.data[targetIdx+1] = srcData[srcIdx+1];
+                        imgData.data[targetIdx+2] = srcData[srcIdx+2];
+                        imgData.data[targetIdx+3] = srcData[srcIdx+3];
                     }
                 }
                 ctx.putImageData(imgData, 0, 0);
             }
 
-            // 2. ADIM: Renk Filtreleri ve Yoğunluk (Crispy Ayarı)
-            const intensity = parseFloat(intensityRange.value); // 0 - 500
+            // 2. Renk ve Yoğunluk (Crispy Görüntü)
+            const intensity = parseFloat(intensityRange.value);
             const filter = filterType.value;
 
             if (filter !== 'none' || intensity !== 100) {
                 const imgData = ctx.getImageData(0, 0, w, h);
                 const data = imgData.data;
-                
-                // Yoğunluk çarpanı (500'de aşırı kırılma yaratması için)
                 const contrastFactor = intensity / 100; 
 
                 for (let i = 0; i < data.length; i += 4) {
@@ -333,38 +386,26 @@
                     let g = data[i+1];
                     let b = data[i+2];
 
-                    // Crispy Kontrast Ayarı (Yoğunluk arttıkça renkler patlar)
                     if (intensity !== 100) {
                         r = ((r / 255 - 0.5) * contrastFactor + 0.5) * 255;
                         g = ((g / 255 - 0.5) * contrastFactor + 0.5) * 255;
                         b = ((b / 255 - 0.5) * contrastFactor + 0.5) * 255;
                     }
 
-                    // Filtre Seçenekleri
                     if (filter === 'cyberpunk') {
-                        // Kırmızı ve maviyi patlat, yeşili kıs
-                        r = r * 1.5;
-                        g = g * 0.2;
-                        b = b * 1.8;
+                        r = r * 1.5; g = g * 0.2; b = b * 1.8;
                     } else if (filter === 'radioactive') {
-                        // Yeşili aşırı aç, diğerlerini öldür
-                        r = r * 0.3;
-                        g = g * 2.5;
-                        b = b * 0.2;
+                        r = r * 0.3; g = g * 2.5; b = b * 0.2;
                     } else if (filter === 'deepfry') {
-                        // Renkleri sınır değerlere daya (Kızartma efekti)
                         r = r > 128 ? r * 2 : r * 0.5;
                         g = g > 128 ? g * 1.5 : g * 0.3;
                         b = b < 128 ? b * 0.2 : b * 0.8;
                     } else if (filter === 'monochrome') {
                         const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-                        // Yüksek kontrastlı siyah beyaz
                         const thresh = gray > 128 ? 255 : 0;
-                        // Yoğunluğa göre eşik değerine yaklaştır
                         r = g = b = (gray * (1 - (intensity/500)) + thresh * (intensity/500));
                     }
 
-                    // Sınır koruması (0-255 arası tut)
                     data[i] = Math.min(255, Math.max(0, r));
                     data[i+1] = Math.min(255, Math.max(0, g));
                     data[i+2] = Math.min(255, Math.max(0, b));
@@ -375,7 +416,7 @@
             animationFrameId = requestAnimationFrame(renderTimeline);
         }
 
-        // 3. ADIM: Videoyu Kaydetme ve İndirme (MediaRecorder API)
+        // 3. Videoyu Kaydetme (Bozulmuş Görüntü + Bozulmuş Ses)
         downloadBtn.addEventListener('click', () => {
             if (downloadBtn.textContent.includes('Durdur')) {
                 mediaRecorder.stop();
@@ -383,26 +424,18 @@
             }
 
             recordedChunks = [];
-            // Canvas'tan 30 FPS'lik bir akış (stream) alıyoruz
-            const stream = outputCanvas.captureStream(30);
             
-            // Eğer varsa ses kanalını da orijinal videodan ekle
-            if (sourceVideo.captureStream) {
-                const videoStream = sourceVideo.captureStream();
-                const audioTracks = videoStream.getAudioTracks();
-                if (audioTracks.length > 0) {
-                    stream.addTrack(audioTracks[0]);
-                }
-            } else if (sourceVideo.mozCaptureStream) {
-                const videoStream = sourceVideo.mozCaptureStream();
-                const audioTracks = videoStream.getAudioTracks();
-                if (audioTracks.length > 0) {
-                    stream.addTrack(audioTracks[0]);
-                }
+            // Canvas'tan 30 FPS video akışı al
+            const canvasStream = outputCanvas.captureStream(30);
+            
+            // Web Audio API ile bozduğumuz sanal ses kanalını yakala ve videoya ekle
+            const distortedAudioTrack = audioDestination.stream.getAudioTracks()[0];
+            if (distortedAudioTrack) {
+                canvasStream.addTrack(distortedAudioTrack);
             }
 
-            mediaRecorder = new MediaRecorder(stream, {
-                mimeType: 'video/webm; codecs=vp9'
+            mediaRecorder = new MediaRecorder(canvasStream, {
+                mimeType: 'video/webm; codecs=vp9,opus'
             });
 
             mediaRecorder.ondataavailable = (e) => {
@@ -413,10 +446,9 @@
                 const blob = new Blob(recordedChunks, { type: 'video/webm' });
                 const url = URL.createObjectURL(blob);
                 
-                // Gizli link oluşturup indirmeyi tetikle
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'henry-games-distorted-video.webm';
+                a.download = 'henry-games-earrape-distorted.webm';
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -426,14 +458,12 @@
                 sourceVideo.pause();
             };
 
-            // Kaydı başlat ve videoyu başa sarıp oynat
             downloadBtn.textContent = '🛑 Kaydı Durdur ve İndir';
             downloadBtn.style.backgroundColor = '#ef4444';
             sourceVideo.currentTime = 0;
             sourceVideo.play();
             mediaRecorder.start();
 
-            // Video bitince otomatik durdur
             sourceVideo.onended = () => {
                 if (mediaRecorder.state !== 'inactive') {
                     mediaRecorder.stop();
