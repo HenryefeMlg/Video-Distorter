@@ -1,2 +1,446 @@
-# Video-Distorter
-0
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Henry Games Video Distorter</title>
+    <style>
+        :root {
+            --bg-color: #0f0f12;
+            --panel-color: #1a1a24;
+            --accent-color: #ff3366;
+            --text-color: #e2e8f0;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        header {
+            width: 100%;
+            padding: 20px;
+            text-align: center;
+            background: linear-gradient(180deg, rgba(255,51,102,0.1) 0%, rgba(0,0,0,0) 100%);
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #fff;
+            text-shadow: 0 0 10px var(--accent-color);
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            width: 90%;
+            max-width: 1200px;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        @media (min-width: 768px) {
+            .container {
+                flex-direction: row;
+            }
+        }
+
+        .workspace {
+            flex: 2;
+            background-color: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            min-height: 400px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            border: 1px solid #2d2d3d;
+        }
+
+        canvas, video {
+            max-width: 100%;
+            max-height: 600px;
+            border-radius: 4px;
+        }
+
+        /* Gizli ham video elementi */
+        #sourceVideo {
+            display: none;
+        }
+
+        .controls-panel {
+            flex: 1;
+            background-color: var(--panel-color);
+            padding: 25px;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            border: 1px solid #2d2d3d;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #a0aec0;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        label span {
+            color: var(--accent-color);
+            font-family: monospace;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent-color);
+            cursor: pointer;
+        }
+
+        select {
+            width: 100%;
+            padding: 10px;
+            background-color: #0f0f12;
+            color: #fff;
+            border: 1px solid #3d3d5d;
+            border-radius: 6px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .btn {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(255,51,102,0.4);
+        }
+
+        .btn-secondary {
+            background-color: #3d3d5d;
+        }
+
+        .btn-secondary:hover {
+            background-color: #4d4d6d;
+            box-shadow: none;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .placeholder-text {
+            color: #718096;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Henry Games Video Distorter</h1>
+    </header>
+
+    <div class="container">
+        <!-- Video Alanı -->
+        <div class="workspace">
+            <div id="placeholder" class="placeholder-text">
+                <p>Lütfen düzenlemek için bir video yükleyin</p>
+                <button class="btn btn-secondary" onclick="document.getElementById('fileInput').click()">Video Seç</button>
+            </div>
+            <video id="sourceVideo" loop crossorigin="anonymous"></video>
+            <canvas id="outputCanvas" style="display: none;"></canvas>
+        </div>
+
+        <!-- Kontrol Paneli -->
+        <div class="controls-panel">
+            <input type="file" id="fileInput" accept="video/*">
+            
+            <button class="btn" onclick="document.getElementById('fileInput').click()">
+                📁 Yeni Video Yükle
+            </button>
+
+            <hr style="border-color: #2d2d3d; margin: 10px 0;">
+
+            <!-- Distorsiyon Sürgüsü -->
+            <div class="control-group">
+                <label>Distorsiyon (Soldan Sağa Dalga) <span id="distVal">%0</span></label>
+                <input type="range" id="distortionRange" min="0" max="800" value="0">
+            </div>
+
+            <!-- Filtre Tipi -->
+            <div class="control-group">
+                <label>Video Renk Filtresi</label>
+                <select id="filterType">
+                    <option value="none">Normal</option>
+                    <option value="cyberpunk">Cyberpunk (Neon Kırmızı/Mavi)</option>
+                    <option value="radioactive">Radioactive (Zehirli Yeşil)</option>
+                    <option value="deepfry">Deep Fried (Aşırı Doygun)</option>
+                    <option value="monochrome">Monokrom (Yüksek Kontrast Siyah/Beyaz)</option>
+                </select>
+            </div>
+
+            <!-- Yoğunluk Sürgüsü -->
+            <div class="control-group">
+                <label>Filtre Yoğunluğu (Crispy Seviyesi) <span id="intensityVal">%100</span></label>
+                <input type="range" id="intensityRange" min="0" max="500" value="100">
+            </div>
+
+            <!-- İndirme Butonu -->
+            <button class="btn" id="downloadBtn" style="background-color: #10b981; display: none;">
+                💾 Bozulmuş Videoyu İndir
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const sourceVideo = document.getElementById('sourceVideo');
+        const outputCanvas = document.getElementById('outputCanvas');
+        const ctx = outputCanvas.getContext('2d');
+        const placeholder = document.getElementById('placeholder');
+        const downloadBtn = document.getElementById('downloadBtn');
+
+        // Kontroller
+        const distortionRange = document.getElementById('distortionRange');
+        const filterType = document.getElementById('filterType');
+        const intensityRange = document.getElementById('intensityRange');
+
+        // Değer Göstergeleri
+        const distVal = document.getElementById('distVal');
+        const intensityVal = document.getElementById('intensityVal');
+
+        let animationFrameId;
+        let mediaRecorder;
+        let recordedChunks = [];
+
+        // Input Değişiklikleri Dinleme
+        distortionRange.addEventListener('input', (e) => distVal.textContent = `%${e.target.value}`);
+        intensityRange.addEventListener('input', (e) => intensityVal.textContent = `%${e.target.value}`);
+
+        // Video Yükleme İşlemi
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const fileURL = URL.createObjectURL(file);
+                sourceVideo.src = fileURL;
+                placeholder.style.display = 'none';
+                outputCanvas.style.style = 'block';
+                sourceVideo.style.display = 'none'; // Sadece canvas'ı göstereceğiz
+                
+                sourceVideo.addEventListener('loadedmetadata', () => {
+                    outputCanvas.width = sourceVideo.videoWidth;
+                    outputCanvas.height = sourceVideo.videoHeight;
+                    outputCanvas.style.display = 'block';
+                    downloadBtn.style.display = 'block';
+                    sourceVideo.play();
+                    renderTimeline();
+                });
+            }
+        });
+
+        // Gerçek Zamanlı Efekt Döngüsü
+        function renderTimeline() {
+            if (sourceVideo.paused || sourceVideo.ended) {
+                animationFrameId = requestAnimationFrame(renderTimeline);
+                return;
+            }
+
+            const w = outputCanvas.width;
+            const h = outputCanvas.height;
+
+            // İlk olarak temiz ham görüntüyü çiz
+            ctx.drawImage(sourceVideo, 0, 0, w, h);
+
+            // 1. ADIM: Soldan Sağa Dalga Distorsiyonu (Pixel Shifting)
+            const distAmp = parseFloat(distortionRange.value); 
+            if (distAmp > 0) {
+                const imgData = ctx.getImageData(0, 0, w, h);
+                const srcData = new Uint8ClampedArray(imgData.data);
+                const time = Date.now() * 0.005;
+
+                // %800'e kadar ölçeklemek için çarpan
+                const distortionStrength = (distAmp / 100) * 15; 
+
+                for (let y = 0; y < h; y++) {
+                    // Soldan sağa dalga efekti için sinüs dalgası
+                    const shiftX = Math.floor(Math.sin((y / 30) + time) * distortionStrength);
+                    
+                    for (let x = 0; x < w; x++) {
+                        let srcX = x + shiftX;
+                        // Ekran dışına taşmayı engelle (Sarıp sarmala veya sınırda tut)
+                        if (srcX < 0) srcX = 0;
+                        if (srcX >= w) srcX = w - 1;
+
+                        const targetIdx = (y * w + x) * 4;
+                        const srcIdx = (y * w + srcX) * 4;
+
+                        imgData.data[targetIdx] = srcData[srcIdx];     // R
+                        imgData.data[targetIdx+1] = srcData[srcIdx+1]; // G
+                        imgData.data[targetIdx+2] = srcData[srcIdx+2]; // B
+                        imgData.data[targetIdx+3] = srcData[srcIdx+3]; // A
+                    }
+                }
+                ctx.putImageData(imgData, 0, 0);
+            }
+
+            // 2. ADIM: Renk Filtreleri ve Yoğunluk (Crispy Ayarı)
+            const intensity = parseFloat(intensityRange.value); // 0 - 500
+            const filter = filterType.value;
+
+            if (filter !== 'none' || intensity !== 100) {
+                const imgData = ctx.getImageData(0, 0, w, h);
+                const data = imgData.data;
+                
+                // Yoğunluk çarpanı (500'de aşırı kırılma yaratması için)
+                const contrastFactor = intensity / 100; 
+
+                for (let i = 0; i < data.length; i += 4) {
+                    let r = data[i];
+                    let g = data[i+1];
+                    let b = data[i+2];
+
+                    // Crispy Kontrast Ayarı (Yoğunluk arttıkça renkler patlar)
+                    if (intensity !== 100) {
+                        r = ((r / 255 - 0.5) * contrastFactor + 0.5) * 255;
+                        g = ((g / 255 - 0.5) * contrastFactor + 0.5) * 255;
+                        b = ((b / 255 - 0.5) * contrastFactor + 0.5) * 255;
+                    }
+
+                    // Filtre Seçenekleri
+                    if (filter === 'cyberpunk') {
+                        // Kırmızı ve maviyi patlat, yeşili kıs
+                        r = r * 1.5;
+                        g = g * 0.2;
+                        b = b * 1.8;
+                    } else if (filter === 'radioactive') {
+                        // Yeşili aşırı aç, diğerlerini öldür
+                        r = r * 0.3;
+                        g = g * 2.5;
+                        b = b * 0.2;
+                    } else if (filter === 'deepfry') {
+                        // Renkleri sınır değerlere daya (Kızartma efekti)
+                        r = r > 128 ? r * 2 : r * 0.5;
+                        g = g > 128 ? g * 1.5 : g * 0.3;
+                        b = b < 128 ? b * 0.2 : b * 0.8;
+                    } else if (filter === 'monochrome') {
+                        const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+                        // Yüksek kontrastlı siyah beyaz
+                        const thresh = gray > 128 ? 255 : 0;
+                        // Yoğunluğa göre eşik değerine yaklaştır
+                        r = g = b = (gray * (1 - (intensity/500)) + thresh * (intensity/500));
+                    }
+
+                    // Sınır koruması (0-255 arası tut)
+                    data[i] = Math.min(255, Math.max(0, r));
+                    data[i+1] = Math.min(255, Math.max(0, g));
+                    data[i+2] = Math.min(255, Math.max(0, b));
+                }
+                ctx.putImageData(imgData, 0, 0);
+            }
+
+            animationFrameId = requestAnimationFrame(renderTimeline);
+        }
+
+        // 3. ADIM: Videoyu Kaydetme ve İndirme (MediaRecorder API)
+        downloadBtn.addEventListener('click', () => {
+            if (downloadBtn.textContent.includes('Durdur')) {
+                mediaRecorder.stop();
+                return;
+            }
+
+            recordedChunks = [];
+            // Canvas'tan 30 FPS'lik bir akış (stream) alıyoruz
+            const stream = outputCanvas.captureStream(30);
+            
+            // Eğer varsa ses kanalını da orijinal videodan ekle
+            if (sourceVideo.captureStream) {
+                const videoStream = sourceVideo.captureStream();
+                const audioTracks = videoStream.getAudioTracks();
+                if (audioTracks.length > 0) {
+                    stream.addTrack(audioTracks[0]);
+                }
+            } else if (sourceVideo.mozCaptureStream) {
+                const videoStream = sourceVideo.mozCaptureStream();
+                const audioTracks = videoStream.getAudioTracks();
+                if (audioTracks.length > 0) {
+                    stream.addTrack(audioTracks[0]);
+                }
+            }
+
+            mediaRecorder = new MediaRecorder(stream, {
+                mimeType: 'video/webm; codecs=vp9'
+            });
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) recordedChunks.push(e.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                
+                // Gizli link oluşturup indirmeyi tetikle
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'henry-games-distorted-video.webm';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                
+                downloadBtn.textContent = '💾 Bozulmuş Videoyu İndir';
+                downloadBtn.style.backgroundColor = '#10b981';
+                sourceVideo.pause();
+            };
+
+            // Kaydı başlat ve videoyu başa sarıp oynat
+            downloadBtn.textContent = '🛑 Kaydı Durdur ve İndir';
+            downloadBtn.style.backgroundColor = '#ef4444';
+            sourceVideo.currentTime = 0;
+            sourceVideo.play();
+            mediaRecorder.start();
+
+            // Video bitince otomatik durdur
+            sourceVideo.onended = () => {
+                if (mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                }
+            };
+        });
+    </script>
+</body>
+</html>
+
