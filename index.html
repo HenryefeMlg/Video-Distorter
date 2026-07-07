@@ -271,7 +271,7 @@
             <hr>
 
             <button class="btn" id="downloadBtn" style="background-color: #10b981; display: none;">
-                💾 Efektli Videoyu Derle ve İndir (MP4)
+                💾 Tüm Videoyu Efektli İndir (MP4)
             </button>
         </div>
     </div>
@@ -302,6 +302,7 @@
         let gainNode;
         let audioDestination;
 
+        // Kontrast ve Ses Girişlerini Birbirinden Tamamen Soyutladık
         contrastRange.addEventListener('input', (e) => { contrastNum.value = e.target.value; });
         contrastNum.addEventListener('input', (e) => {
             let val = parseFloat(e.target.value) || 0;
@@ -359,9 +360,9 @@
                 distortionNode.curve = makeDistortionCurve(0);
                 gainNode.gain.value = 1.0;
             } else {
-                const distortionAmount = (intensity - 100) * 3.5; 
+                const distortionAmount = (intensity - 100) * 4.0; 
                 distortionNode.curve = makeDistortionCurve(distortionAmount);
-                gainNode.gain.value = 1.0 + ((intensity - 100) / 100) * 0.5;
+                gainNode.gain.value = 1.0 + ((intensity - 100) / 100) * 0.6;
             }
         }
 
@@ -389,39 +390,40 @@
             }
         });
 
+        // SADECE GÖRÜNTÜ KONTRASTINI AYRIŞTIRAN FONSİYON
         function processFrame(contrastValue, filter) {
             const w = outputCanvas.width;
             const h = outputCanvas.height;
-            if (filter !== 'none' || contrastValue !== 100) {
-                const imgData = ctx.getImageData(0, 0, w, h);
-                const data = imgData.data;
-                const contrastFactor = contrastValue / 100; 
+            const imgData = ctx.getImageData(0, 0, w, h);
+            const data = imgData.data;
+            const contrastFactor = contrastValue / 100; 
 
-                for (let i = 0; i < data.length; i += 4) {
-                    let r = data[i]; let g = data[i+1]; let b = data[i+2];
-                    if (contrastValue !== 100) {
-                        r = ((r / 255 - 0.5) * contrastFactor + 0.5) * 255;
-                        g = ((g / 255 - 0.5) * contrastFactor + 0.5) * 255;
-                        b = ((b / 255 - 0.5) * contrastFactor + 0.5) * 255;
-                    }
-                    if (filter === 'cyberpunk') { r = r * 1.8; g = g * 0.1; b = b * 2.2; }
-                    else if (filter === 'radioactive') { r = r * 0.2; g = g * 3.0; b = b * 0.1; }
-                    else if (filter === 'deepfry') {
-                        r = r > 128 ? r * 2.5 : r * 0.4;
-                        g = g > 128 ? g * 2.0 : g * 0.2;
-                        b = b < 128 ? b * 0.1 : b * 1.2;
-                    } else if (filter === 'monochrome') {
-                        const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-                        const thresh = gray > 128 ? 255 : 0;
-                        const blendFactor = Math.min(1, contrastValue / 500);
-                        r = g = b = (gray * (1 - blendFactor) + thresh * blendFactor);
-                    }
-                    data[i] = Math.min(255, Math.max(0, r));
-                    data[i+1] = Math.min(255, Math.max(0, g));
-                    data[i+2] = Math.min(255, Math.max(0, b));
+            for (let i = 0; i < data.length; i += 4) {
+                let r = data[i]; let g = data[i+1]; let b = data[i+2];
+
+                // Ses bozulmasından tamamen soyutlanmış bağımsız kontrast formülü
+                if (contrastValue !== 100) {
+                    r = ((r / 255 - 0.5) * contrastFactor + 0.5) * 255;
+                    g = ((g / 255 - 0.5) * contrastFactor + 0.5) * 255;
+                    b = ((b / 255 - 0.5) * contrastFactor + 0.5) * 255;
                 }
-                ctx.putImageData(imgData, 0, 0);
+
+                if (filter === 'cyberpunk') { r = r * 1.8; g = g * 0.1; b = b * 2.2; }
+                else if (filter === 'radioactive') { r = r * 0.2; g = g * 3.0; b = b * 0.1; }
+                else if (filter === 'deepfry') {
+                    r = r > 128 ? r * 2.5 : r * 0.4; g = g > 128 ? g * 2.0 : g * 0.2; b = b < 128 ? b * 0.1 : b * 1.2;
+                } else if (filter === 'monochrome') {
+                    const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+                    const thresh = gray > 128 ? 255 : 0;
+                    const blendFactor = Math.min(1, contrastValue / 500);
+                    r = g = b = (gray * (1 - blendFactor) + thresh * blendFactor);
+                }
+
+                data[i] = Math.min(255, Math.max(0, r));
+                data[i+1] = Math.min(255, Math.max(0, g));
+                data[i+2] = Math.min(255, Math.max(0, b));
             }
+            ctx.putImageData(imgData, 0, 0);
         }
 
         function renderTimeline() {
@@ -436,13 +438,14 @@
             animationFrameId = requestAnimationFrame(renderTimeline);
         }
 
-        // --- KARE TABANLI (FRAME-BY-FRAME) KESİNTİSİZ RENDER VE İNDİRME SİSTEMİ ---
-        downloadBtn.addEventListener('click', async () => {
+        // --- SESİ VE TÜM SAHNELERİ EKSİKSİZ YAKALAYAN CANLI RENDER SİSTEMİ ---
+        downloadBtn.addEventListener('click', () => {
             if (isProcessing) return;
             isProcessing = true;
             recordedChunks = [];
             
-            sourceVideo.pause();
+            // Kayıt esnasında video akışını hoparlörden duymamak için local'de kısıyoruz (kayda gider)
+            sourceVideo.muted = true; 
 
             const canvasStream = outputCanvas.captureStream(30);
             if (audioDestination && audioDestination.stream) {
@@ -459,58 +462,50 @@
             mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
 
             mediaRecorder.onstop = () => {
-                const blob = new Blob(recordedChunks, { type: 'video/mp4' });
+                const blob = new Blob(recordedChunks, { type: options.mimeType.includes('mp4') ? 'video/mp4' : 'video/webm' });
                 const url = URL.createObjectURL(blob);
                 
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'henry-games-perfect-distorted.mp4';
+                a.download = 'henry-games-audio-fixed.mp4';
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
                 
-                downloadBtn.textContent = '💾 Efektli Videoyu Derle ve İndir (MP4)';
+                // Normal oynatma ayarlarına geri dön
+                sourceVideo.muted = false;
+                sourceVideo.loop = true;
+                isProcessing = false;
+                
+                downloadBtn.textContent = '💾 Tüm Videoyu Efektli İndir (MP4)';
                 downloadBtn.style.backgroundColor = '#10b981';
                 downloadBtn.disabled = false;
-                
-                isProcessing = false;
                 sourceVideo.play().catch(() => {});
             };
 
-            downloadBtn.textContent = '⏳ Sahneler Kare Kare İşleniyor...';
+            downloadBtn.textContent = '⏳ Ses ve Görüntü Gömülüyor...';
             downloadBtn.style.backgroundColor = '#d97706';
             downloadBtn.disabled = true;
 
-            mediaRecorder.start();
+            sourceVideo.loop = false;
+            sourceVideo.currentTime = 0;
 
-            const duration = sourceVideo.duration;
-            const fps = 30;
-            const totalFrames = Math.floor(duration * fps);
-            const frameTime = 1 / fps;
-
-            // Arka planda tüm sahneleri tek bir kare bile atlamadan manuel işleme adımı
-            for (let i = 0; i <= totalFrames; i++) {
-                sourceVideo.currentTime = i * frameTime;
+            // Ses kanalının açık kalıp kayda akması için videonun doğal zamanlı akmasını sağlıyoruz
+            sourceVideo.play().then(() => {
+                mediaRecorder.start(500);
                 
-                // Tarayıcının ilgili kareye tamamen konumlanmasını (seek) bekliyoruz
-                await new Promise((resolve) => {
-                    sourceVideo.onseeked = resolve;
-                });
-
-                // Kareyi yakala ve efekti üstüne yapıştır
-                ctx.drawImage(sourceVideo, 0, 0, outputCanvas.width, outputCanvas.height);
-                processFrame(parseFloat(contrastNum.value), filterType.value);
-                
-                // Tarayıcının kareyi belleğe tam kaydetmesi için mikro gecikme
-                await new Promise(r => setTimeout(r, 15));
-            }
-
-            // Tüm kareler bitince kaydı kapat
-            if (mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-            }
+                // Canlı çizim ve ses dinleme saati (Donmayı engeller, ses kaybını sıfırlar)
+                const renderInterval = setInterval(() => {
+                    if (sourceVideo.ended || !isProcessing) {
+                        clearInterval(renderInterval);
+                        if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+                        return;
+                    }
+                    ctx.drawImage(sourceVideo, 0, 0, outputCanvas.width, outputCanvas.height);
+                    processFrame(parseFloat(contrastNum.value), filterType.value);
+                }, 1000 / 30);
+            }).catch(err => console.log(err));
         });
     </script>
 </body>
-    </html>
-    
+</html>
