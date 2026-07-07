@@ -97,18 +97,27 @@
             gap: 8px;
         }
 
-        label {
+        .label-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             font-weight: 600;
             font-size: 0.9rem;
             color: #a0aec0;
-            display: flex;
-            justify-content: space-between;
         }
 
-        label span {
+        /* Custom Sayı Giriş Kutuları */
+        .custom-num-input {
+            width: 70px;
+            background-color: #08080c;
+            border: 1px solid #29293d;
             color: var(--accent-color);
             font-family: monospace;
-            font-size: 1rem;
+            font-size: 0.95rem;
+            padding: 4px;
+            border-radius: 4px;
+            text-align: center;
+            outline: none;
         }
 
         input[type="range"] {
@@ -227,7 +236,7 @@
             <hr>
 
             <div class="control-group">
-                <label>Video Renk Filtresi</label>
+                <div class="label-row">Video Renk Filtresi</div>
                 <select id="filterType">
                     <option value="none">Normal</option>
                     <option value="cyberpunk">Cyberpunk (Neon Kırmızı/Mavi)</option>
@@ -238,26 +247,32 @@
             </div>
 
             <div class="control-group">
-                <label>Görüntü Kontrast Yoğunluğu <span id="contrastVal">%100</span></label>
+                <div class="label-row">
+                    <span>Görüntü Kontrastı (%)</span>
+                    <input type="number" id="contrastNum" class="custom-num-input" value="100" min="0">
+                </div>
                 <input type="range" id="contrastRange" min="0" max="2000" value="100">
             </div>
 
             <div class="control-group">
-                <label>Ses Bozulma Seviyesi (Earrape) <span id="audioDistVal">%100</span></label>
-                <input type="range" id="audioDistRange" min="0" max="2000" value="100">
+                <div class="label-row">
+                    <span>Ses Bozulma (Earrape %)</span>
+                    <input type="number" id="audioDistNum" class="custom-num-input" value="100" min="0">
+                </div>
+                <input type="range" id="audioDistRange" min="0" max="5000" value="100">
                 
                 <div class="template-container">
-                    <button class="btn-template" onclick="setAudioTemplate(10)">%10</button>
-                    <button class="btn-template" onclick="setAudioTemplate(100)">%100</button>
-                    <button class="btn-template" onclick="setAudioTemplate(1000)">%1000</button>
-                    <button class="btn-template" onclick="setAudioTemplate(2000)">%2000</button>
+                    <button class="btn-template" onclick="setAudioCustomValue(10)">%10</button>
+                    <button class="btn-template" onclick="setAudioCustomValue(100)">%100</button>
+                    <button class="btn-template" onclick="setAudioCustomValue(1000)">%1000</button>
+                    <button class="btn-template" onclick="setAudioCustomValue(2000)">%2000</button>
                 </div>
             </div>
 
             <hr>
 
             <button class="btn" id="downloadBtn" style="background-color: #10b981; display: none;">
-                💾 Bozulmuş Videoyu İndir (MP4)
+                💾 Tüm Videoyu İşle ve İndir (MP4)
             </button>
         </div>
     </div>
@@ -274,13 +289,12 @@
         const contrastRange = document.getElementById('contrastRange');
         const audioDistRange = document.getElementById('audioDistRange');
         
-        const contrastVal = document.getElementById('contrastVal');
-        const audioDistVal = document.getElementById('audioDistVal');
+        const contrastNum = document.getElementById('contrastNum');
+        const audioDistNum = document.getElementById('audioDistNum');
 
         let animationFrameId;
         let mediaRecorder;
         let recordedChunks = [];
-        let isRecording = false;
 
         let audioCtx;
         let audioSource;
@@ -288,20 +302,29 @@
         let gainNode;
         let audioDestination;
 
-        // Kontrast Sürgüsü Değişimi (Sadece kontrast değerini günceller)
+        // --- Kontrast Senkronizasyonu ---
         contrastRange.addEventListener('input', (e) => {
-            contrastVal.textContent = `%${e.target.value}`;
+            contrastNum.value = e.target.value;
+        });
+        contrastNum.addEventListener('input', (e) => {
+            let val = parseFloat(e.target.value) || 0;
+            contrastRange.value = Math.min(val, 2000); 
         });
 
-        // Ses Sürgüsü Değişimi (Görüntüye kesinlikle dokunmaz)
+        // --- Ses Deformasyonu Senkronizasyonu ---
         audioDistRange.addEventListener('input', (e) => {
-            audioDistVal.textContent = `%${e.target.value}`;
+            audioDistNum.value = e.target.value;
             updateAudioDistortion(parseFloat(e.target.value));
         });
+        audioNumEvent = audioDistNum.addEventListener('input', (e) => {
+            let val = parseFloat(e.target.value) || 0;
+            audioDistRange.value = Math.min(val, 5000);
+            updateAudioDistortion(val);
+        });
 
-        function setAudioTemplate(value) {
+        function setAudioCustomValue(value) {
             audioDistRange.value = value;
-            audioDistVal.textContent = `%${value}`;
+            audioDistNum.value = value;
             updateAudioDistortion(value);
         }
 
@@ -367,7 +390,7 @@
                     if (audioCtx && audioCtx.state === 'suspended') {
                         audioCtx.resume();
                     }
-                    updateAudioDistortion(parseFloat(audioDistRange.value));
+                    updateAudioDistortion(parseFloat(audioDistNum.value));
                     
                     sourceVideo.play().catch(err => console.log("Oynatma hatası:", err));
                     renderTimeline();
@@ -375,20 +398,10 @@
             }
         });
 
-        // Kontrast Döngüsü (Tamamen bağımsız parametreyle çalışır)
-        function renderTimeline() {
-            if (sourceVideo.paused || sourceVideo.ended) {
-                animationFrameId = requestAnimationFrame(renderTimeline);
-                return;
-            }
-
+        function processFrame(contrastValue, filter) {
             const w = outputCanvas.width;
             const h = outputCanvas.height;
-            ctx.drawImage(sourceVideo, 0, 0, w, h);
-
-            const contrastValue = parseFloat(contrastRange.value);
-            const filter = filterType.value;
-
+            
             if (filter !== 'none' || contrastValue !== 100) {
                 const imgData = ctx.getImageData(0, 0, w, h);
                 const data = imgData.data;
@@ -426,18 +439,20 @@
                 }
                 ctx.putImageData(imgData, 0, 0);
             }
+        }
 
+        function renderTimeline() {
+            if (sourceVideo.paused || sourceVideo.ended) {
+                animationFrameId = requestAnimationFrame(renderTimeline);
+                return;
+            }
+            ctx.drawImage(sourceVideo, 0, 0, outputCanvas.width, outputCanvas.height);
+            processFrame(parseFloat(contrastNum.value), filterType.value);
             animationFrameId = requestAnimationFrame(renderTimeline);
         }
 
-        // GELİŞTİRİLMİŞ TAM SÜRE KAYIT VE DURDURMALI İNDİRME SİSTEMİ
+        // --- ARKA PLANDA OTOMATİK VE TAM ZAMANLI İNDİRME SİSTEMİ ---
         downloadBtn.addEventListener('click', () => {
-            // Eğer kayıt halihazırda devam ediyorsa, butona tekrar basıldığında kaydı durdurur ve indirir
-            if (isRecording) {
-                mediaRecorder.stop();
-                return;
-            }
-
             recordedChunks = [];
             
             const canvasStream = outputCanvas.captureStream(30);
@@ -456,9 +471,7 @@
             mediaRecorder = new MediaRecorder(canvasStream, options);
 
             mediaRecorder.ondataavailable = (e) => {
-                if (e.data && e.data.size > 0) {
-                    recordedChunks.push(e.data);
-                }
+                if (e.data && e.data.size > 0) recordedChunks.push(e.data);
             };
 
             mediaRecorder.onstop = () => {
@@ -467,40 +480,42 @@
                 
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'henry-games-distorted.mp4';
+                a.download = 'henry-games-distorted-full.mp4';
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
                 
-                downloadBtn.textContent = '💾 Bozulmuş Videoyu İndir (MP4)';
+                downloadBtn.textContent = '💾 Tüm Videoyu İşle ve İndir (MP4)';
                 downloadBtn.style.backgroundColor = '#10b981';
-                isRecording = false;
+                downloadBtn.disabled = false;
+                
+                // Kayıt bitince videoyu normal döngüsüne geri alıyoruz
+                sourceVideo.muted = false;
+                sourceVideo.loop = true;
+                sourceVideo.play().catch(() => {});
             };
 
-            // Kaydı başlat
-            isRecording = true;
-            downloadBtn.textContent = '🛑 Kaydı Durdur ve Dosyayı Al';
-            downloadBtn.style.backgroundColor = '#ef4444';
+            // Arayüz Kilitleme ve Arka Plan Simülasyonu Başlangıcı
+            downloadBtn.textContent = '⏳ Arka Planda Video Derleniyor...';
+            downloadBtn.style.backgroundColor = '#d97706';
+            downloadBtn.disabled = true;
 
-            // Güvenli başlatma
-            if (audioCtx && audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
-
-            // Videoyu en başa alıp oynatarak tüm sahneleri sırayla kaydeder
+            // Videoyu sıfırlayıp loop'u kırıyoruz ki tam süresinde bitsin
+            sourceVideo.loop = false;
+            sourceVideo.muted = true; // Derleme esnasında earrape ses hoparlöre vurmasın
             sourceVideo.currentTime = 0;
-            sourceVideo.play().then(() => {
-                mediaRecorder.start(1000); // 1 saniyelik dilimlerle veriyi sorunsuzca yazar
-            }).catch(err => {
-                console.log("Kayıt esnasında oynatılamadı:", err);
-            });
 
-            // Video bittiğinde otomatik olarak kaydı sonlandırır ve indirir
+            // Video tam olarak bittiğinde MediaRecorder'ı otomatik durduracak tetikleyici
             sourceVideo.onended = () => {
                 if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                     mediaRecorder.stop();
                 }
             };
+
+            // Kaydı başlat ve videoyu tam hızda oynat
+            sourceVideo.play().then(() => {
+                mediaRecorder.start(500);
+            }).catch(err => console.log(err));
         });
     </script>
 </body>
