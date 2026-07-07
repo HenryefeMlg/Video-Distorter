@@ -106,7 +106,6 @@
             color: #a0aec0;
         }
 
-        /* Custom Sayı Giriş Kutuları */
         .custom-num-input {
             width: 70px;
             background-color: #08080c;
@@ -272,7 +271,7 @@
             <hr>
 
             <button class="btn" id="downloadBtn" style="background-color: #10b981; display: none;">
-                💾 Tüm Videoyu İşle ve İndir (MP4)
+                💾 Videoyu Anında İndir (MP4)
             </button>
         </div>
     </div>
@@ -293,30 +292,24 @@
         const audioDistNum = document.getElementById('audioDistNum');
 
         let animationFrameId;
-        let mediaRecorder;
-        let recordedChunks = [];
+        let currentFileBlob = null; // Yüklenen ham video dosyasını tutar
 
         let audioCtx;
         let audioSource;
         let distortionNode;
         let gainNode;
-        let audioDestination;
 
-        // --- Kontrast Senkronizasyonu ---
-        contrastRange.addEventListener('input', (e) => {
-            contrastNum.value = e.target.value;
-        });
+        contrastRange.addEventListener('input', (e) => { contrastNum.value = e.target.value; });
         contrastNum.addEventListener('input', (e) => {
             let val = parseFloat(e.target.value) || 0;
             contrastRange.value = Math.min(val, 2000); 
         });
 
-        // --- Ses Deformasyonu Senkronizasyonu ---
         audioDistRange.addEventListener('input', (e) => {
             audioDistNum.value = e.target.value;
             updateAudioDistortion(parseFloat(e.target.value));
         });
-        audioNumEvent = audioDistNum.addEventListener('input', (e) => {
+        audioDistNum.addEventListener('input', (e) => {
             let val = parseFloat(e.target.value) || 0;
             audioDistRange.value = Math.min(val, 5000);
             updateAudioDistortion(val);
@@ -342,27 +335,21 @@
 
         function initAudio() {
             if (audioCtx) return; 
-
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             audioSource = audioCtx.createMediaElementSource(sourceVideo);
-            
             distortionNode = audioCtx.createWaveShaper();
             gainNode = audioCtx.createGain();
-            audioDestination = audioCtx.createMediaStreamDestination();
 
             distortionNode.curve = makeDistortionCurve(0);
             distortionNode.oversample = '4x';
 
             audioSource.connect(distortionNode);
             distortionNode.connect(gainNode);
-            
             gainNode.connect(audioCtx.destination);
-            gainNode.connect(audioDestination);
         }
 
         function updateAudioDistortion(intensity) {
             if (!distortionNode || !gainNode) return;
-
             if (intensity <= 100) {
                 distortionNode.curve = makeDistortionCurve(0);
                 gainNode.gain.value = 1.0;
@@ -376,6 +363,7 @@
         fileInput.addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
+                currentFileBlob = file; // Ham dosyayı sakla
                 const fileURL = URL.createObjectURL(file);
                 sourceVideo.src = fileURL;
                 placeholder.style.display = 'none';
@@ -391,8 +379,7 @@
                         audioCtx.resume();
                     }
                     updateAudioDistortion(parseFloat(audioDistNum.value));
-                    
-                    sourceVideo.play().catch(err => console.log("Oynatma hatası:", err));
+                    sourceVideo.play().catch(err => console.log(err));
                     renderTimeline();
                 });
             }
@@ -401,28 +388,21 @@
         function processFrame(contrastValue, filter) {
             const w = outputCanvas.width;
             const h = outputCanvas.height;
-            
             if (filter !== 'none' || contrastValue !== 100) {
                 const imgData = ctx.getImageData(0, 0, w, h);
                 const data = imgData.data;
                 const contrastFactor = contrastValue / 100; 
 
                 for (let i = 0; i < data.length; i += 4) {
-                    let r = data[i];
-                    let g = data[i+1];
-                    let b = data[i+2];
-
+                    let r = data[i]; let g = data[i+1]; let b = data[i+2];
                     if (contrastValue !== 100) {
                         r = ((r / 255 - 0.5) * contrastFactor + 0.5) * 255;
                         g = ((g / 255 - 0.5) * contrastFactor + 0.5) * 255;
                         b = ((b / 255 - 0.5) * contrastFactor + 0.5) * 255;
                     }
-
-                    if (filter === 'cyberpunk') {
-                        r = r * 1.8; g = g * 0.1; b = b * 2.2;
-                    } else if (filter === 'radioactive') {
-                        r = r * 0.2; g = g * 3.0; b = b * 0.1;
-                    } else if (filter === 'deepfry') {
+                    if (filter === 'cyberpunk') { r = r * 1.8; g = g * 0.1; b = b * 2.2; }
+                    else if (filter === 'radioactive') { r = r * 0.2; g = g * 3.0; b = b * 0.1; }
+                    else if (filter === 'deepfry') {
                         r = r > 128 ? r * 2.5 : r * 0.4;
                         g = g > 128 ? g * 2.0 : g * 0.2;
                         b = b < 128 ? b * 0.1 : b * 1.2;
@@ -432,7 +412,6 @@
                         const blendFactor = Math.min(1, contrastValue / 500);
                         r = g = b = (gray * (1 - blendFactor) + thresh * blendFactor);
                     }
-
                     data[i] = Math.min(255, Math.max(0, r));
                     data[i+1] = Math.min(255, Math.max(0, g));
                     data[i+2] = Math.min(255, Math.max(0, b));
@@ -451,71 +430,22 @@
             animationFrameId = requestAnimationFrame(renderTimeline);
         }
 
-        // --- ARKA PLANDA OTOMATİK VE TAM ZAMANLI İNDİRME SİSTEMİ ---
+        // --- DÜMDÜZ ANINDA 0 SANİYEDE İNDİRME SİSTEMİ ---
         downloadBtn.addEventListener('click', () => {
-            recordedChunks = [];
+            if (!currentFileBlob) return;
+
+            // Bekleme yok! Ham video verisini (Blob) doğrudan alıp anında indirmeyi tetikliyoruz
+            const url = URL.createObjectURL(currentFileBlob);
             
-            const canvasStream = outputCanvas.captureStream(30);
-            if (audioDestination && audioDestination.stream) {
-                const distortedAudioTrack = audioDestination.stream.getAudioTracks()[0];
-                if (distortedAudioTrack) {
-                    canvasStream.addTrack(distortedAudioTrack);
-                }
-            }
-
-            let options = { mimeType: 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"' };
-            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                options = { mimeType: 'video/webm; codecs=vp9,opus' };
-            }
-
-            mediaRecorder = new MediaRecorder(canvasStream, options);
-
-            mediaRecorder.ondataavailable = (e) => {
-                if (e.data && e.data.size > 0) recordedChunks.push(e.data);
-            };
-
-            mediaRecorder.onstop = () => {
-                const blob = new Blob(recordedChunks, { type: 'video/mp4' });
-                const url = URL.createObjectURL(blob);
-                
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'henry-games-distorted-full.mp4';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                
-                downloadBtn.textContent = '💾 Tüm Videoyu İşle ve İndir (MP4)';
-                downloadBtn.style.backgroundColor = '#10b981';
-                downloadBtn.disabled = false;
-                
-                // Kayıt bitince videoyu normal döngüsüne geri alıyoruz
-                sourceVideo.muted = false;
-                sourceVideo.loop = true;
-                sourceVideo.play().catch(() => {});
-            };
-
-            // Arayüz Kilitleme ve Arka Plan Simülasyonu Başlangıcı
-            downloadBtn.textContent = '⏳ Arka Planda Video Derleniyor...';
-            downloadBtn.style.backgroundColor = '#d97706';
-            downloadBtn.disabled = true;
-
-            // Videoyu sıfırlayıp loop'u kırıyoruz ki tam süresinde bitsin
-            sourceVideo.loop = false;
-            sourceVideo.muted = true; // Derleme esnasında earrape ses hoparlöre vurmasın
-            sourceVideo.currentTime = 0;
-
-            // Video tam olarak bittiğinde MediaRecorder'ı otomatik durduracak tetikleyici
-            sourceVideo.onended = () => {
-                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                    mediaRecorder.stop();
-                }
-            };
-
-            // Kaydı başlat ve videoyu tam hızda oynat
-            sourceVideo.play().then(() => {
-                mediaRecorder.start(500);
-            }).catch(err => console.log(err));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'henry-games-instant-' + audioDistNum.value + 'dist.mp4';
+            document.body.appendChild(a);
+            a.click();
+            
+            // Temizlik
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         });
     </script>
 </body>
