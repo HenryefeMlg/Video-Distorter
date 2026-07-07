@@ -271,7 +271,7 @@
             <hr>
 
             <button class="btn" id="downloadBtn" style="background-color: #10b981; display: none;">
-                💾 Videoyu Başlat ve Kaydet (Birlikte İzle)
+                💾 Başa Al, Oynat ve Kaydet (MP4)
             </button>
         </div>
     </div>
@@ -302,7 +302,6 @@
         let gainNode;
         let audioDestination;
 
-        // Kontrast ve Ses Senkronizasyonları (Ayrı Tutuldu)
         contrastRange.addEventListener('input', (e) => { contrastNum.value = e.target.value; });
         contrastNum.addEventListener('input', (e) => {
             let val = parseFloat(e.target.value) || 0;
@@ -390,7 +389,6 @@
             }
         });
 
-        // Sadece kendi kutusundaki değere göre kontrast basan bağımsız yapı
         function processFrame(contrastValue, filter) {
             const w = outputCanvas.width;
             const h = outputCanvas.height;
@@ -435,13 +433,11 @@
             animationFrameId = requestAnimationFrame(renderTimeline);
         }
 
-        // --- ESKİ USUL: VİDEONUN BİTMESİNİ BEKLEYEN KAYIT SİSTEMİ ---
         downloadBtn.addEventListener('click', () => {
             if (isRecording) return;
             isRecording = true;
             recordedChunks = [];
 
-            // Canlı akış kaydı için tuval akışı ve ses birleştiriliyor
             const canvasStream = outputCanvas.captureStream(30);
             if (audioDestination && audioDestination.stream) {
                 const distortedAudioTrack = audioDestination.stream.getAudioTracks()[0];
@@ -462,39 +458,43 @@
                 
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'henry-games-recorded.mp4';
+                a.download = 'henry-games-perfect-sync.mp4';
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
                 
-                // Kayıt bitince döngüyü eski haline getiriyoruz
                 sourceVideo.loop = true;
                 isRecording = false;
                 
-                downloadBtn.textContent = '💾 Videoyu Başlat ve Kaydet (Birlikte İzle)';
+                downloadBtn.textContent = '💾 Başa Al, Oynat ve Kaydet (MP4)';
                 downloadBtn.style.backgroundColor = '#10b981';
                 downloadBtn.disabled = false;
                 sourceVideo.play().catch(() => {});
             };
 
-            downloadBtn.textContent = '🔴 Video Kaydediliyor... (Bitmesini Bekleyin)';
+            downloadBtn.textContent = '🔴 Başa Alınıyor ve Kaydediliyor...';
             downloadBtn.style.backgroundColor = '#ef4444';
             downloadBtn.disabled = true;
 
-            // Videoyu tam süre yakalamak için en başa sarıp döngüsünü kapatıyoruz
             sourceVideo.loop = false;
+            
+            // GARANTİLİ BAŞA SARMA: Tarayıcı tam olarak 0. saniyeye oturduğunda (onseeked tetiklendiğinde) kaydı başlatıyoruz
             sourceVideo.currentTime = 0;
+            
+            sourceVideo.onseeked = () => {
+                // Sadece kayıt başlarken bu tetiklensin diye onseeked fonksiyonunu hemen sıfırlıyoruz
+                sourceVideo.onseeked = null; 
+                
+                sourceVideo.play().then(() => {
+                    mediaRecorder.start(500);
+                }).catch(err => console.log(err));
+            };
 
-            // Video bittiğinde indirmeyi otomatik tetikleyecek dinleyici
             sourceVideo.onended = () => {
                 if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                     mediaRecorder.stop();
                 }
             };
-
-            sourceVideo.play().then(() => {
-                mediaRecorder.start(500);
-            }).catch(err => console.log(err));
         });
     </script>
 </body>
