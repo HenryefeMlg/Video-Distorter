@@ -271,7 +271,7 @@
             <hr>
 
             <button class="btn" id="downloadBtn" style="background-color: #10b981; display: none;">
-                💾 Tüm Videoyu Efektli İndir (MP4)
+                💾 Videoyu Başlat ve Kaydet (Birlikte İzle)
             </button>
         </div>
     </div>
@@ -294,7 +294,7 @@
         let animationFrameId;
         let mediaRecorder;
         let recordedChunks = [];
-        let isProcessing = false;
+        let isRecording = false;
 
         let audioCtx;
         let audioSource;
@@ -302,7 +302,7 @@
         let gainNode;
         let audioDestination;
 
-        // Kontrast ve Ses Girişlerini Birbirinden Tamamen Soyutladık
+        // Kontrast ve Ses Senkronizasyonları (Ayrı Tutuldu)
         contrastRange.addEventListener('input', (e) => { contrastNum.value = e.target.value; });
         contrastNum.addEventListener('input', (e) => {
             let val = parseFloat(e.target.value) || 0;
@@ -390,7 +390,7 @@
             }
         });
 
-        // SADECE GÖRÜNTÜ KONTRASTINI AYRIŞTIRAN FONSİYON
+        // Sadece kendi kutusundaki değere göre kontrast basan bağımsız yapı
         function processFrame(contrastValue, filter) {
             const w = outputCanvas.width;
             const h = outputCanvas.height;
@@ -401,7 +401,6 @@
             for (let i = 0; i < data.length; i += 4) {
                 let r = data[i]; let g = data[i+1]; let b = data[i+2];
 
-                // Ses bozulmasından tamamen soyutlanmış bağımsız kontrast formülü
                 if (contrastValue !== 100) {
                     r = ((r / 255 - 0.5) * contrastFactor + 0.5) * 255;
                     g = ((g / 255 - 0.5) * contrastFactor + 0.5) * 255;
@@ -427,26 +426,22 @@
         }
 
         function renderTimeline() {
-            if ((sourceVideo.paused || sourceVideo.ended) && !isProcessing) {
+            if (sourceVideo.paused || sourceVideo.ended) {
                 animationFrameId = requestAnimationFrame(renderTimeline);
                 return;
             }
-            if (!isProcessing) {
-                ctx.drawImage(sourceVideo, 0, 0, outputCanvas.width, outputCanvas.height);
-                processFrame(parseFloat(contrastNum.value), filterType.value);
-            }
+            ctx.drawImage(sourceVideo, 0, 0, outputCanvas.width, outputCanvas.height);
+            processFrame(parseFloat(contrastNum.value), filterType.value);
             animationFrameId = requestAnimationFrame(renderTimeline);
         }
 
-        // --- SESİ VE TÜM SAHNELERİ EKSİKSİZ YAKALAYAN CANLI RENDER SİSTEMİ ---
+        // --- ESKİ USUL: VİDEONUN BİTMESİNİ BEKLEYEN KAYIT SİSTEMİ ---
         downloadBtn.addEventListener('click', () => {
-            if (isProcessing) return;
-            isProcessing = true;
+            if (isRecording) return;
+            isRecording = true;
             recordedChunks = [];
-            
-            // Kayıt esnasında video akışını hoparlörden duymamak için local'de kısıyoruz (kayda gider)
-            sourceVideo.muted = true; 
 
+            // Canlı akış kaydı için tuval akışı ve ses birleştiriliyor
             const canvasStream = outputCanvas.captureStream(30);
             if (audioDestination && audioDestination.stream) {
                 const distortedAudioTrack = audioDestination.stream.getAudioTracks()[0];
@@ -462,48 +457,43 @@
             mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
 
             mediaRecorder.onstop = () => {
-                const blob = new Blob(recordedChunks, { type: options.mimeType.includes('mp4') ? 'video/mp4' : 'video/webm' });
+                const blob = new Blob(recordedChunks, { type: 'video/mp4' });
                 const url = URL.createObjectURL(blob);
                 
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'henry-games-audio-fixed.mp4';
+                a.download = 'henry-games-recorded.mp4';
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
                 
-                // Normal oynatma ayarlarına geri dön
-                sourceVideo.muted = false;
+                // Kayıt bitince döngüyü eski haline getiriyoruz
                 sourceVideo.loop = true;
-                isProcessing = false;
+                isRecording = false;
                 
-                downloadBtn.textContent = '💾 Tüm Videoyu Efektli İndir (MP4)';
+                downloadBtn.textContent = '💾 Videoyu Başlat ve Kaydet (Birlikte İzle)';
                 downloadBtn.style.backgroundColor = '#10b981';
                 downloadBtn.disabled = false;
                 sourceVideo.play().catch(() => {});
             };
 
-            downloadBtn.textContent = '⏳ Ses ve Görüntü Gömülüyor...';
-            downloadBtn.style.backgroundColor = '#d97706';
+            downloadBtn.textContent = '🔴 Video Kaydediliyor... (Bitmesini Bekleyin)';
+            downloadBtn.style.backgroundColor = '#ef4444';
             downloadBtn.disabled = true;
 
+            // Videoyu tam süre yakalamak için en başa sarıp döngüsünü kapatıyoruz
             sourceVideo.loop = false;
             sourceVideo.currentTime = 0;
 
-            // Ses kanalının açık kalıp kayda akması için videonun doğal zamanlı akmasını sağlıyoruz
+            // Video bittiğinde indirmeyi otomatik tetikleyecek dinleyici
+            sourceVideo.onended = () => {
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                }
+            };
+
             sourceVideo.play().then(() => {
                 mediaRecorder.start(500);
-                
-                // Canlı çizim ve ses dinleme saati (Donmayı engeller, ses kaybını sıfırlar)
-                const renderInterval = setInterval(() => {
-                    if (sourceVideo.ended || !isProcessing) {
-                        clearInterval(renderInterval);
-                        if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-                        return;
-                    }
-                    ctx.drawImage(sourceVideo, 0, 0, outputCanvas.width, outputCanvas.height);
-                    processFrame(parseFloat(contrastNum.value), filterType.value);
-                }, 1000 / 30);
             }).catch(err => console.log(err));
         });
     </script>
