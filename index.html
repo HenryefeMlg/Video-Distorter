@@ -6,9 +6,9 @@
     <title>Henry Games Video Distorter</title>
     <style>
         :root {
-            --bg-color: #0f0f12;
-            --panel-color: #1a1a24;
-            --accent-color: #ff3366;
+            --bg-color: #08080c;
+            --panel-color: #12121a;
+            --accent-color: #ff1f53;
             --text-color: #e2e8f0;
         }
 
@@ -28,16 +28,16 @@
             width: 100%;
             padding: 20px;
             text-align: center;
-            background: linear-gradient(180deg, rgba(255,51,102,0.1) 0%, rgba(0,0,0,0) 100%);
+            background: linear-gradient(180deg, rgba(255,31,83,0.15) 0%, rgba(0,0,0,0) 100%);
         }
 
         h1 {
             margin: 0;
-            font-size: 2.5rem;
+            font-size: 2.3rem;
             text-transform: uppercase;
             letter-spacing: 2px;
             color: #fff;
-            text-shadow: 0 0 10px var(--accent-color);
+            text-shadow: 0 0 15px var(--accent-color);
         }
 
         .container {
@@ -65,8 +65,8 @@
             align-items: center;
             position: relative;
             min-height: 400px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-            border: 1px solid #2d2d3d;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.7);
+            border: 1px solid #1f1f2e;
         }
 
         canvas {
@@ -87,8 +87,8 @@
             display: flex;
             flex-direction: column;
             gap: 20px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-            border: 1px solid #2d2d3d;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            border: 1px solid #1f1f2e;
         }
 
         .control-group {
@@ -108,6 +108,7 @@
         label span {
             color: var(--accent-color);
             font-family: monospace;
+            font-size: 1rem;
         }
 
         input[type="range"] {
@@ -118,20 +119,21 @@
 
         select {
             width: 100%;
-            padding: 10px;
-            background-color: #0f0f12;
+            padding: 12px;
+            background-color: #08080c;
             color: #fff;
-            border: 1px solid #3d3d5d;
+            border: 1px solid #29293d;
             border-radius: 6px;
             outline: none;
             cursor: pointer;
+            font-weight: 500;
         }
 
         .btn {
             background-color: var(--accent-color);
             color: white;
             border: none;
-            padding: 12px 20px;
+            padding: 14px 20px;
             border-radius: 6px;
             font-weight: bold;
             cursor: pointer;
@@ -140,21 +142,47 @@
             justify-content: center;
             align-items: center;
             gap: 10px;
+            font-size: 0.95rem;
         }
 
         .btn:hover {
             opacity: 0.9;
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(255,51,102,0.4);
+            box-shadow: 0 4px 15px rgba(255,31,83,0.4);
         }
 
         .btn-secondary {
-            background-color: #3d3d5d;
+            background-color: #29293d;
         }
 
         .btn-secondary:hover {
-            background-color: #4d4d6d;
+            background-color: #383854;
             box-shadow: none;
+        }
+
+        .template-container {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-top: 4px;
+        }
+
+        .btn-template {
+            background-color: #1c1c28;
+            color: #a0aec0;
+            border: 1px solid #29293d;
+            padding: 8px 4px;
+            font-size: 0.8rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s ease;
+        }
+
+        .btn-template:hover {
+            background-color: var(--accent-color);
+            color: #fff;
+            border-color: var(--accent-color);
         }
 
         #fileInput {
@@ -164,6 +192,12 @@
         .placeholder-text {
             color: #718096;
             text-align: center;
+        }
+
+        hr {
+            border: 0;
+            border-top: 1px solid #1f1f2e;
+            margin: 5px 0;
         }
     </style>
 </head>
@@ -190,12 +224,7 @@
                 📁 Yeni Video Yükle
             </button>
 
-            <hr style="border-color: #2d2d3d; margin: 10px 0;">
-
-            <div class="control-group">
-                <label>Görsel Distorsiyon (Dalga) <span id="distVal">%0</span></label>
-                <input type="range" id="distortionRange" min="0" max="800" value="0">
-            </div>
+            <hr>
 
             <div class="control-group">
                 <label>Video Renk Filtresi</label>
@@ -203,18 +232,32 @@
                     <option value="none">Normal</option>
                     <option value="cyberpunk">Cyberpunk (Neon Kırmızı/Mavi)</option>
                     <option value="radioactive">Radioactive (Zehirli Yeşil)</option>
-                    <option value="deepfry">Deep Fried (Aşırı Doygun)</option>
-                    <option value="monochrome">Monokrom (Yüksek Kontrast Siyah/Beyaz)</option>
+                    <option value="deepfry">Deep Fried (Aşırı Doygun Kızartma)</option>
+                    <option value="monochrome">Monokrom (Siyah / Beyaz Parazit)</option>
                 </select>
             </div>
 
             <div class="control-group">
-                <label>Yoğunluk & Ses Bozulması (Crispy) <span id="intensityVal">%100</span></label>
-                <input type="range" id="intensityRange" min="0" max="500" value="100">
+                <label>Görüntü Kontrast Yoğunluğu <span id="contrastVal">%100</span></label>
+                <input type="range" id="contrastRange" min="0" max="2000" value="100">
             </div>
 
+            <div class="control-group">
+                <label>Ses Bozulma Seviyesi (Earrape) <span id="audioDistVal">%100</span></label>
+                <input type="range" id="audioDistRange" min="0" max="2000" value="100">
+                
+                <div class="template-container">
+                    <button class="btn-template" onclick="setAudioTemplate(10)">%10</button>
+                    <button class="btn-template" onclick="setAudioTemplate(100)">%100</button>
+                    <button class="btn-template" onclick="setAudioTemplate(1000)">%1000</button>
+                    <button class="btn-template" onclick="setAudioTemplate(2000)">%2000</button>
+                </div>
+            </div>
+
+            <hr>
+
             <button class="btn" id="downloadBtn" style="background-color: #10b981; display: none;">
-                💾 Bozulmuş Videoyu İndir
+                💾 Bozulmuş Videoyu İndir (MP4)
             </button>
         </div>
     </div>
@@ -227,32 +270,41 @@
         const placeholder = document.getElementById('placeholder');
         const downloadBtn = document.getElementById('downloadBtn');
 
-        const distortionRange = document.getElementById('distortionRange');
         const filterType = document.getElementById('filterType');
-        const intensityRange = document.getElementById('intensityRange');
-
-        const distVal = document.getElementById('distVal');
-        const intensityVal = document.getElementById('intensityVal');
+        const contrastRange = document.getElementById('contrastRange');
+        const audioDistRange = document.getElementById('audioDistRange');
+        
+        const contrastVal = document.getElementById('contrastVal');
+        const audioDistVal = document.getElementById('audioDistVal');
 
         let animationFrameId;
         let mediaRecorder;
         let recordedChunks = [];
+        let isRecording = false;
 
-        // Web Audio API Değişkenleri
         let audioCtx;
         let audioSource;
         let distortionNode;
         let gainNode;
-        let audioDestination; // Kayıt sistemi için
+        let audioDestination;
 
-        distortionRange.addEventListener('input', (e) => distVal.textContent = `%${e.target.value}`);
-        
-        intensityRange.addEventListener('input', (e) => {
-            intensityVal.textContent = `%${e.target.value}`;
+        // Kontrast Sürgüsü Değişimi (Sadece kontrast değerini günceller)
+        contrastRange.addEventListener('input', (e) => {
+            contrastVal.textContent = `%${e.target.value}`;
+        });
+
+        // Ses Sürgüsü Değişimi (Görüntüye kesinlikle dokunmaz)
+        audioDistRange.addEventListener('input', (e) => {
+            audioDistVal.textContent = `%${e.target.value}`;
             updateAudioDistortion(parseFloat(e.target.value));
         });
 
-        // Ses Bozulma Algoritması (WaveShaper Eğrisi)
+        function setAudioTemplate(value) {
+            audioDistRange.value = value;
+            audioDistVal.textContent = `%${value}`;
+            updateAudioDistortion(value);
+        }
+
         function makeDistortionCurve(amount) {
             const k = typeof amount === 'number' ? amount : 50;
             const n_samples = 44100;
@@ -260,13 +312,11 @@
             const deg = Math.PI / 180;
             for (let i = 0 ; i < n_samples; ++i ) {
                 const x = (i * 2) / n_samples - 1;
-                // Matematiksel sinyal kırpma (Overdrive/Clipping) formülü
-                curve[i] = ( (3 + k) * x * 20 * deg ) / ( Math.PI + k * Math.abs(x) );
+                curve[i] = ( (3 + k) * x * 90 * deg ) / ( Math.PI + k * Math.abs(x) );
             }
             return curve;
         }
 
-        // Ses Sitemini Başlatma (Kullanıcı etkileşimi şarttır)
         function initAudio() {
             if (audioCtx) return; 
 
@@ -277,39 +327,29 @@
             gainNode = audioCtx.createGain();
             audioDestination = audioCtx.createMediaStreamDestination();
 
-            // Eğriyi oluştur ve bağla
             distortionNode.curve = makeDistortionCurve(0);
             distortionNode.oversample = '4x';
 
-            // Ses Zinciri: Video -> Distorsiyon -> Kazanç(Ses Seviyesi) -> Hoparlör & Kayıt Cihazı
             audioSource.connect(distortionNode);
             distortionNode.connect(gainNode);
             
-            // Hem bizim duyabilmemiz için hoparlörlere, hem de kaydetmek için sanal çıkışa bağlıyoruz
             gainNode.connect(audioCtx.destination);
             gainNode.connect(audioDestination);
         }
 
-        // Yoğunluk değiştikçe sesi patlatma fonksiyonu
         function updateAudioDistortion(intensity) {
             if (!distortionNode || !gainNode) return;
 
             if (intensity <= 100) {
-                // %100 ve altında orijinal temiz ses kalır
                 distortionNode.curve = makeDistortionCurve(0);
                 gainNode.gain.value = 1.0;
             } else {
-                // %101 - %500 arasında ses kademeli olarak bass boosted ve earrape moduna girer
-                const distortionAmount = (intensity - 100) * 1.5; 
+                const distortionAmount = (intensity - 100) * 3.5; 
                 distortionNode.curve = makeDistortionCurve(distortionAmount);
-                
-                // Ses patladığı için kulakları tamamen sağır etmesin diye kazancı hafif dengeliyoruz 
-                // ama yine de "crispy" / aşırı yüksek seviyede kalmasını sağlıyoruz
                 gainNode.gain.value = 1.0 + ((intensity - 100) / 100) * 0.5;
             }
         }
 
-        // Video Yükleme
         fileInput.addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
@@ -323,18 +363,19 @@
                     outputCanvas.style.display = 'block';
                     downloadBtn.style.display = 'block';
                     
-                    // Ses motorunu çalıştır ve videoyu oynat
                     initAudio();
-                    audioCtx.resume();
-                    updateAudioDistortion(parseFloat(intensityRange.value));
+                    if (audioCtx && audioCtx.state === 'suspended') {
+                        audioCtx.resume();
+                    }
+                    updateAudioDistortion(parseFloat(audioDistRange.value));
                     
-                    sourceVideo.play();
+                    sourceVideo.play().catch(err => console.log("Oynatma hatası:", err));
                     renderTimeline();
                 });
             }
         });
 
-        // Görüntü Efekt Döngüsü
+        // Kontrast Döngüsü (Tamamen bağımsız parametreyle çalışır)
         function renderTimeline() {
             if (sourceVideo.paused || sourceVideo.ended) {
                 animationFrameId = requestAnimationFrame(renderTimeline);
@@ -345,65 +386,38 @@
             const h = outputCanvas.height;
             ctx.drawImage(sourceVideo, 0, 0, w, h);
 
-            // 1. Distorsiyon (Pixel Shifting)
-            const distAmp = parseFloat(distortionRange.value); 
-            if (distAmp > 0) {
-                const imgData = ctx.getImageData(0, 0, w, h);
-                const srcData = new Uint8ClampedArray(imgData.data);
-                const time = Date.now() * 0.005;
-                const distortionStrength = (distAmp / 100) * 15; 
-
-                for (let y = 0; y < h; y++) {
-                    const shiftX = Math.floor(Math.sin((y / 30) + time) * distortionStrength);
-                    for (let x = 0; x < w; x++) {
-                        let srcX = x + shiftX;
-                        if (srcX < 0) srcX = 0;
-                        if (srcX >= w) srcX = w - 1;
-
-                        const targetIdx = (y * w + x) * 4;
-                        const srcIdx = (y * w + srcX) * 4;
-
-                        imgData.data[targetIdx] = srcData[srcIdx];
-                        imgData.data[targetIdx+1] = srcData[srcIdx+1];
-                        imgData.data[targetIdx+2] = srcData[srcIdx+2];
-                        imgData.data[targetIdx+3] = srcData[srcIdx+3];
-                    }
-                }
-                ctx.putImageData(imgData, 0, 0);
-            }
-
-            // 2. Renk ve Yoğunluk (Crispy Görüntü)
-            const intensity = parseFloat(intensityRange.value);
+            const contrastValue = parseFloat(contrastRange.value);
             const filter = filterType.value;
 
-            if (filter !== 'none' || intensity !== 100) {
+            if (filter !== 'none' || contrastValue !== 100) {
                 const imgData = ctx.getImageData(0, 0, w, h);
                 const data = imgData.data;
-                const contrastFactor = intensity / 100; 
+                const contrastFactor = contrastValue / 100; 
 
                 for (let i = 0; i < data.length; i += 4) {
                     let r = data[i];
                     let g = data[i+1];
                     let b = data[i+2];
 
-                    if (intensity !== 100) {
+                    if (contrastValue !== 100) {
                         r = ((r / 255 - 0.5) * contrastFactor + 0.5) * 255;
                         g = ((g / 255 - 0.5) * contrastFactor + 0.5) * 255;
                         b = ((b / 255 - 0.5) * contrastFactor + 0.5) * 255;
                     }
 
                     if (filter === 'cyberpunk') {
-                        r = r * 1.5; g = g * 0.2; b = b * 1.8;
+                        r = r * 1.8; g = g * 0.1; b = b * 2.2;
                     } else if (filter === 'radioactive') {
-                        r = r * 0.3; g = g * 2.5; b = b * 0.2;
+                        r = r * 0.2; g = g * 3.0; b = b * 0.1;
                     } else if (filter === 'deepfry') {
-                        r = r > 128 ? r * 2 : r * 0.5;
-                        g = g > 128 ? g * 1.5 : g * 0.3;
-                        b = b < 128 ? b * 0.2 : b * 0.8;
+                        r = r > 128 ? r * 2.5 : r * 0.4;
+                        g = g > 128 ? g * 2.0 : g * 0.2;
+                        b = b < 128 ? b * 0.1 : b * 1.2;
                     } else if (filter === 'monochrome') {
                         const gray = 0.299 * r + 0.587 * g + 0.114 * b;
                         const thresh = gray > 128 ? 255 : 0;
-                        r = g = b = (gray * (1 - (intensity/500)) + thresh * (intensity/500));
+                        const blendFactor = Math.min(1, contrastValue / 500);
+                        r = g = b = (gray * (1 - blendFactor) + thresh * blendFactor);
                     }
 
                     data[i] = Math.min(255, Math.max(0, r));
@@ -416,56 +430,74 @@
             animationFrameId = requestAnimationFrame(renderTimeline);
         }
 
-        // 3. Videoyu Kaydetme (Bozulmuş Görüntü + Bozulmuş Ses)
+        // GELİŞTİRİLMİŞ TAM SÜRE KAYIT VE DURDURMALI İNDİRME SİSTEMİ
         downloadBtn.addEventListener('click', () => {
-            if (downloadBtn.textContent.includes('Durdur')) {
+            // Eğer kayıt halihazırda devam ediyorsa, butona tekrar basıldığında kaydı durdurur ve indirir
+            if (isRecording) {
                 mediaRecorder.stop();
                 return;
             }
 
             recordedChunks = [];
             
-            // Canvas'tan 30 FPS video akışı al
             const canvasStream = outputCanvas.captureStream(30);
-            
-            // Web Audio API ile bozduğumuz sanal ses kanalını yakala ve videoya ekle
-            const distortedAudioTrack = audioDestination.stream.getAudioTracks()[0];
-            if (distortedAudioTrack) {
-                canvasStream.addTrack(distortedAudioTrack);
+            if (audioDestination && audioDestination.stream) {
+                const distortedAudioTrack = audioDestination.stream.getAudioTracks()[0];
+                if (distortedAudioTrack) {
+                    canvasStream.addTrack(distortedAudioTrack);
+                }
             }
 
-            mediaRecorder = new MediaRecorder(canvasStream, {
-                mimeType: 'video/webm; codecs=vp9,opus'
-            });
+            let options = { mimeType: 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"' };
+            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                options = { mimeType: 'video/webm; codecs=vp9,opus' };
+            }
+
+            mediaRecorder = new MediaRecorder(canvasStream, options);
 
             mediaRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0) recordedChunks.push(e.data);
+                if (e.data && e.data.size > 0) {
+                    recordedChunks.push(e.data);
+                }
             };
 
             mediaRecorder.onstop = () => {
-                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const blob = new Blob(recordedChunks, { type: 'video/mp4' });
                 const url = URL.createObjectURL(blob);
                 
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'henry-games-earrape-distorted.webm';
+                a.download = 'henry-games-distorted.mp4';
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
                 
-                downloadBtn.textContent = '💾 Bozulmuş Videoyu İndir';
+                downloadBtn.textContent = '💾 Bozulmuş Videoyu İndir (MP4)';
                 downloadBtn.style.backgroundColor = '#10b981';
-                sourceVideo.pause();
+                isRecording = false;
             };
 
-            downloadBtn.textContent = '🛑 Kaydı Durdur ve İndir';
+            // Kaydı başlat
+            isRecording = true;
+            downloadBtn.textContent = '🛑 Kaydı Durdur ve Dosyayı Al';
             downloadBtn.style.backgroundColor = '#ef4444';
-            sourceVideo.currentTime = 0;
-            sourceVideo.play();
-            mediaRecorder.start();
 
+            // Güvenli başlatma
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            // Videoyu en başa alıp oynatarak tüm sahneleri sırayla kaydeder
+            sourceVideo.currentTime = 0;
+            sourceVideo.play().then(() => {
+                mediaRecorder.start(1000); // 1 saniyelik dilimlerle veriyi sorunsuzca yazar
+            }).catch(err => {
+                console.log("Kayıt esnasında oynatılamadı:", err);
+            });
+
+            // Video bittiğinde otomatik olarak kaydı sonlandırır ve indirir
             sourceVideo.onended = () => {
-                if (mediaRecorder.state !== 'inactive') {
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                     mediaRecorder.stop();
                 }
             };
