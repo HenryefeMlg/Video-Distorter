@@ -271,7 +271,7 @@
             <hr>
 
             <button class="btn" id="downloadBtn" style="background-color: #10b981; display: none;">
-                💾 Efektli Videoyu Derle ve İndir
+                💾 Efektli Videoyu Derle ve İndir (MP4)
             </button>
         </div>
     </div>
@@ -429,16 +429,21 @@
                 animationFrameId = requestAnimationFrame(renderTimeline);
                 return;
             }
-            ctx.drawImage(sourceVideo, 0, 0, outputCanvas.width, outputCanvas.height);
-            processFrame(parseFloat(contrastNum.value), filterType.value);
+            if (!isProcessing) {
+                ctx.drawImage(sourceVideo, 0, 0, outputCanvas.width, outputCanvas.height);
+                processFrame(parseFloat(contrastNum.value), filterType.value);
+            }
             animationFrameId = requestAnimationFrame(renderTimeline);
         }
 
-        // --- HIZLANDIRILMIŞ VE EFEKTLİ VİDEO DÖNÜŞTÜRÜCÜ KAYIT SİSTEMİ ---
-        downloadBtn.addEventListener('click', () => {
+        // --- KARE TABANLI (FRAME-BY-FRAME) KESİNTİSİZ RENDER VE İNDİRME SİSTEMİ ---
+        downloadBtn.addEventListener('click', async () => {
+            if (isProcessing) return;
             isProcessing = true;
             recordedChunks = [];
             
+            sourceVideo.pause();
+
             const canvasStream = outputCanvas.captureStream(30);
             if (audioDestination && audioDestination.stream) {
                 const distortedAudioTrack = audioDestination.stream.getAudioTracks()[0];
@@ -454,49 +459,58 @@
             mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
 
             mediaRecorder.onstop = () => {
-                const blob = new Blob(recordedChunks, { type: options.mimeType.includes('mp4') ? 'video/mp4' : 'video/webm' });
+                const blob = new Blob(recordedChunks, { type: 'video/mp4' });
                 const url = URL.createObjectURL(blob);
                 
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'henry-games-distorted.mp4';
+                a.download = 'henry-games-perfect-distorted.mp4';
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
                 
-                // Eski haline döndür
-                sourceVideo.playbackRate = 1.0;
-                sourceVideo.muted = false;
-                sourceVideo.loop = true;
-                isProcessing = false;
-                
-                downloadBtn.textContent = '💾 Efektli Videoyu Derle ve İndir';
+                downloadBtn.textContent = '💾 Efektli Videoyu Derle ve İndir (MP4)';
                 downloadBtn.style.backgroundColor = '#10b981';
                 downloadBtn.disabled = false;
+                
+                isProcessing = false;
                 sourceVideo.play().catch(() => {});
             };
 
-            downloadBtn.textContent = '⚡ Efektler İşleniyor (Hızlı Mod)...';
+            downloadBtn.textContent = '⏳ Sahneler Kare Kare İşleniyor...';
             downloadBtn.style.backgroundColor = '#d97706';
             downloadBtn.disabled = true;
 
-            sourceVideo.loop = false;
-            sourceVideo.muted = true; // Hızlı sararken ses cızırtısı çıkmasın diye
-            sourceVideo.currentTime = 0;
-            
-            // RENDERING HIZI: Videoyu 4 kat hızlı işleterek indirme süresini 4 kat kısaltıyoruz!
-            sourceVideo.playbackRate = 4.0; 
+            mediaRecorder.start();
 
-            sourceVideo.onended = () => {
-                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                    mediaRecorder.stop();
-                }
-            };
+            const duration = sourceVideo.duration;
+            const fps = 30;
+            const totalFrames = Math.floor(duration * fps);
+            const frameTime = 1 / fps;
 
-            sourceVideo.play().then(() => {
-                mediaRecorder.start(250);
-            }).catch(err => console.log(err));
+            // Arka planda tüm sahneleri tek bir kare bile atlamadan manuel işleme adımı
+            for (let i = 0; i <= totalFrames; i++) {
+                sourceVideo.currentTime = i * frameTime;
+                
+                // Tarayıcının ilgili kareye tamamen konumlanmasını (seek) bekliyoruz
+                await new Promise((resolve) => {
+                    sourceVideo.onseeked = resolve;
+                });
+
+                // Kareyi yakala ve efekti üstüne yapıştır
+                ctx.drawImage(sourceVideo, 0, 0, outputCanvas.width, outputCanvas.height);
+                processFrame(parseFloat(contrastNum.value), filterType.value);
+                
+                // Tarayıcının kareyi belleğe tam kaydetmesi için mikro gecikme
+                await new Promise(r => setTimeout(r, 15));
+            }
+
+            // Tüm kareler bitince kaydı kapat
+            if (mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
         });
     </script>
 </body>
-</html>
+    </html>
+    
