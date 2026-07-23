@@ -22,6 +22,7 @@
             flex-direction: column;
             align-items: center;
             min-height: 100vh;
+            user-select: none;
         }
 
         header {
@@ -50,9 +51,7 @@
         }
 
         @media (min-width: 768px) {
-            .container {
-                flex-direction: row;
-            }
+            .container { flex-direction: row; }
         }
 
         .workspace {
@@ -75,9 +74,7 @@
             border-radius: 4px;
         }
 
-        #sourceVideo {
-            display: none;
-        }
+        #sourceVideo { display: none; }
 
         .controls-panel {
             flex: 1;
@@ -86,7 +83,7 @@
             border-radius: 12px;
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 15px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.5);
             border: 1px solid #1f1f2e;
         }
@@ -153,19 +150,32 @@
             font-size: 0.95rem;
         }
 
-        .btn:hover {
+        .btn:hover:not(:disabled) {
             opacity: 0.9;
             transform: translateY(-1px);
             box-shadow: 0 4px 15px rgba(255,31,83,0.4);
         }
 
-        .btn-secondary {
-            background-color: #29293d;
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            filter: grayscale(1);
         }
 
-        .btn-secondary:hover {
-            background-color: #383854;
-            box-shadow: none;
+        .btn-secondary { background-color: #29293d; }
+        .btn-secondary:hover:not(:disabled) { background-color: #383854; box-shadow: none; }
+
+        .btn-mosh {
+            background: linear-gradient(135deg, #8b5cf6 0%, #d946ef 100%);
+            border: none;
+            box-shadow: 0 4px 15px rgba(217, 70, 239, 0.3);
+            font-size: 0.9rem;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-mosh:active:not(:disabled) {
+            transform: scale(0.97);
+            background: linear-gradient(135deg, #7c3aed 0%, #c026d3 100%);
         }
 
         .template-container {
@@ -193,20 +203,9 @@
             border-color: var(--accent-color);
         }
 
-        #fileInput {
-            display: none;
-        }
-
-        .placeholder-text {
-            color: #718096;
-            text-align: center;
-        }
-
-        hr {
-            border: 0;
-            border-top: 1px solid #1f1f2e;
-            margin: 5px 0;
-        }
+        #fileInput { display: none; }
+        .placeholder-text { color: #718096; text-align: center; }
+        hr { border: 0; border-top: 1px solid #1f1f2e; margin: 5px 0; }
     </style>
 </head>
 <body>
@@ -268,6 +267,11 @@
                 </div>
             </div>
 
+            <!-- Sayfa açıldığı andan itibaren panellerde görünür duran Datamosh butonu -->
+            <button class="btn btn-mosh" id="moshBtn" disabled>
+                ⚡ BASILI TUT: 0.1s Loop | BIRAK: 3s Datamosh
+            </button>
+
             <hr>
 
             <button class="btn" id="downloadBtn" style="background-color: #10b981; display: none;">
@@ -283,6 +287,7 @@
         const ctx = outputCanvas.getContext('2d');
         const placeholder = document.getElementById('placeholder');
         const downloadBtn = document.getElementById('downloadBtn');
+        const moshBtn = document.getElementById('moshBtn');
 
         const filterType = document.getElementById('filterType');
         const contrastRange = document.getElementById('contrastRange');
@@ -301,6 +306,12 @@
         let distortionNode;
         let gainNode;
         let audioDestination;
+
+        let isMoshing = false;
+        let loopStartTime = 0;
+        let loopInterval = null;
+        let moshBlendFrames = 0;
+        let frozenFrameData = null;
 
         contrastRange.addEventListener('input', (e) => { contrastNum.value = e.target.value; });
         contrastNum.addEventListener('input', (e) => {
@@ -377,6 +388,7 @@
                     outputCanvas.height = sourceVideo.videoHeight;
                     outputCanvas.style.display = 'block';
                     downloadBtn.style.display = 'block';
+                    moshBtn.disabled = false; // Video yüklenince buton aktifleşir
                     
                     initAudio();
                     if (audioCtx && audioCtx.state === 'suspended') {
@@ -389,12 +401,50 @@
             }
         });
 
+        function startMosh() {
+            if (isMoshing || moshBtn.disabled) return;
+            isMoshing = true;
+            loopStartTime = sourceVideo.currentTime;
+            
+            frozenFrameData = ctx.getImageData(0, 0, outputCanvas.width, outputCanvas.height);
+
+            loopInterval = setInterval(() => {
+                sourceVideo.currentTime = loopStartTime;
+            }, 100);
+        }
+
+        function stopMosh() {
+            if (!isMoshing || moshBtn.disabled) return;
+            isMoshing = false;
+            clearInterval(loopInterval);
+
+            sourceVideo.currentTime = Math.min(sourceVideo.duration - 0.1, sourceVideo.currentTime + 3.0);
+            moshBlendFrames = 15;
+        }
+
+        moshBtn.addEventListener('mousedown', startMosh);
+        moshBtn.addEventListener('mouseup', stopMosh);
+        moshBtn.addEventListener('mouseleave', stopMosh);
+        moshBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startMosh(); });
+        moshBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopMosh(); });
+
         function processFrame(contrastValue, filter) {
             const w = outputCanvas.width;
             const h = outputCanvas.height;
             const imgData = ctx.getImageData(0, 0, w, h);
             const data = imgData.data;
-            const contrastFactor = contrastValue / 100; 
+            const contrastFactor = contrastValue / 100;
+
+            if (moshBlendFrames > 0 && frozenFrameData) {
+                const frozenPixels = frozenFrameData.data;
+                const alpha = moshBlendFrames / 15;
+                for (let i = 0; i < data.length; i += 4) {
+                    data[i] = data[i] * (1 - alpha) + frozenPixels[i] * alpha;
+                    data[i+1] = data[i+1] * (1 - alpha) + frozenPixels[i+1] * alpha;
+                    data[i+2] = data[i+2] * (1 - alpha) + frozenPixels[i+2] * alpha;
+                }
+                moshBlendFrames--;
+            }
 
             for (let i = 0; i < data.length; i += 4) {
                 let r = data[i]; let g = data[i+1]; let b = data[i+2];
@@ -458,7 +508,7 @@
                 
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'henry-games-perfect-sync.mp4';
+                a.download = 'henry-games-datamoshed.mp4';
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -477,14 +527,10 @@
             downloadBtn.disabled = true;
 
             sourceVideo.loop = false;
-            
-            // GARANTİLİ BAŞA SARMA: Tarayıcı tam olarak 0. saniyeye oturduğunda (onseeked tetiklendiğinde) kaydı başlatıyoruz
             sourceVideo.currentTime = 0;
             
             sourceVideo.onseeked = () => {
-                // Sadece kayıt başlarken bu tetiklensin diye onseeked fonksiyonunu hemen sıfırlıyoruz
                 sourceVideo.onseeked = null; 
-                
                 sourceVideo.play().then(() => {
                     mediaRecorder.start(500);
                 }).catch(err => console.log(err));
