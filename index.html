@@ -220,7 +220,8 @@
                 <p>Lütfen düzenlemek için bir video yükleyin</p>
                 <button class="btn btn-secondary" onclick="document.getElementById('fileInput').click()">Video Seç</button>
             </div>
-            <video id="sourceVideo" loop crossorigin="anonymous"></video>
+            <!-- crossorigin kaldırıldı -->
+            <video id="sourceVideo" loop playsinline></video>
             <canvas id="outputCanvas" style="display: none;"></canvas>
         </div>
 
@@ -283,7 +284,7 @@
         const fileInput = document.getElementById('fileInput');
         const sourceVideo = document.getElementById('sourceVideo');
         const outputCanvas = document.getElementById('outputCanvas');
-        const ctx = outputCanvas.getContext('2d');
+        const ctx = outputCanvas.getContext('2d', { willReadFrequently: true });
         const placeholder = document.getElementById('placeholder');
         const downloadBtn = document.getElementById('downloadBtn');
         const moshBtn = document.getElementById('moshBtn');
@@ -347,20 +348,27 @@
         }
 
         function initAudio() {
-            if (audioCtx) return; 
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            audioSource = audioCtx.createMediaElementSource(sourceVideo);
-            distortionNode = audioCtx.createWaveShaper();
-            gainNode = audioCtx.createGain();
-            audioDestination = audioCtx.createMediaStreamDestination();
+            try {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (!audioSource) {
+                    audioSource = audioCtx.createMediaElementSource(sourceVideo);
+                    distortionNode = audioCtx.createWaveShaper();
+                    gainNode = audioCtx.createGain();
+                    audioDestination = audioCtx.createMediaStreamDestination();
 
-            distortionNode.curve = makeDistortionCurve(0);
-            distortionNode.oversample = '4x';
+                    distortionNode.curve = makeDistortionCurve(0);
+                    distortionNode.oversample = '4x';
 
-            audioSource.connect(distortionNode);
-            distortionNode.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-            gainNode.connect(audioDestination);
+                    audioSource.connect(distortionNode);
+                    distortionNode.connect(gainNode);
+                    gainNode.connect(audioCtx.destination);
+                    gainNode.connect(audioDestination);
+                }
+            } catch (err) {
+                console.log("Ses altyapısı zaten kuruldu veya tarayıcı engeli:", err);
+            }
         }
 
         function updateAudioDistortion(intensity) {
@@ -382,7 +390,7 @@
                 sourceVideo.src = fileURL;
                 placeholder.style.display = 'none';
                 
-                sourceVideo.addEventListener('loadedmetadata', () => {
+                sourceVideo.onloadedmetadata = () => {
                     outputCanvas.width = sourceVideo.videoWidth;
                     outputCanvas.height = sourceVideo.videoHeight;
                     outputCanvas.style.display = 'block';
@@ -395,8 +403,11 @@
                     }
                     updateAudioDistortion(parseFloat(audioDistNum.value));
                     sourceVideo.play().catch(err => console.log(err));
-                    renderTimeline();
-                });
+                    
+                    if (!animationFrameId) {
+                        renderTimeline();
+                    }
+                };
             }
         });
 
@@ -405,7 +416,11 @@
             isMoshing = true;
             loopStartTime = sourceVideo.currentTime;
             
-            frozenFrameData = ctx.getImageData(0, 0, outputCanvas.width, outputCanvas.height);
+            try {
+                frozenFrameData = ctx.getImageData(0, 0, outputCanvas.width, outputCanvas.height);
+            } catch(e) {
+                console.log("Datamosh dondurma hatası:", e);
+            }
 
             loopInterval = setInterval(() => {
                 sourceVideo.currentTime = loopStartTime;
@@ -430,7 +445,13 @@
         function processFrame(contrastValue, filter) {
             const w = outputCanvas.width;
             const h = outputCanvas.height;
-            const imgData = ctx.getImageData(0, 0, w, h);
+            let imgData;
+            try {
+                imgData = ctx.getImageData(0, 0, w, h);
+            } catch(e) {
+                return; // CORS / Güvenlik engeli olursa çökmesin
+            }
+            
             const data = imgData.data;
             const contrastFactor = contrastValue / 100;
 
@@ -498,12 +519,10 @@
         }
 
         function renderTimeline() {
-            if (sourceVideo.paused || sourceVideo.ended) {
-                animationFrameId = requestAnimationFrame(renderTimeline);
-                return;
+            if (!sourceVideo.paused && !sourceVideo.ended) {
+                ctx.drawImage(sourceVideo, 0, 0, outputCanvas.width, outputCanvas.height);
+                processFrame(parseFloat(contrastNum.value), filterType.value);
             }
-            ctx.drawImage(sourceVideo, 0, 0, outputCanvas.width, outputCanvas.height);
-            processFrame(parseFloat(contrastNum.value), filterType.value);
             animationFrameId = requestAnimationFrame(renderTimeline);
         }
 
@@ -518,16 +537,4 @@
                 if (distortedAudioTrack) canvasStream.addTrack(distortedAudioTrack);
             }
 
-            let options = { mimeType: 'video/mp4' };
-            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                options = { mimeType: 'video/mp4;codecs=avc1.42E01E,mp4a.40.2' };
-            }
-            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                options = { mimeType: 'video/webm;codecs=vp8,opus' };
-            }
-
-            mediaRecorder = new MediaRecorder(canvasStream, options);
-            mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
-
-            mediaRecorder.onstop = () => {
-                const blob = new Blob(recordedChunks, { type: 'video/mp4'
+            let options = { 
